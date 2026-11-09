@@ -1,22 +1,28 @@
 #include "WiFi.h"
+#include "HammingCode.h"
 #include <Adafruit_MPU6050.h>
 #include <Adafruit_Sensor.h>
 #include <MockMPU.h>
 #include <WebSocketsServer.h>
 #include <cassert>
 
-const int DATA_RATE = 115200;
+static constexpr int SERIAL_BAUD = 115200;
+static constexpr int UART_BAUD   = 115200;
+static constexpr int DATABUFSIZE = 128;
+static constexpr int CODESIZE    = 8;
+
 const char* ssid = "esp32";
 const uint16_t PORT = 400;
 
 WebSocketsServer webSocket = WebSocketsServer(PORT);
-static constexpr int PACKETBUFLEN = 28;
 static constexpr int BUFSIZE = 10;
-static uint8_t batch[BUFSIZE][PACKETBUFLEN];
+static uint8_t batch[BUFSIZE][DATABUFSIZE / 8];
 static uint32_t lastSample = 0;
 static int batchCount = 0;
 
+
 MockMPU mpu;
+HardwareSerial ESPSerial(2);
 // Uncomment when using real sensor,
 // 
 // Wire.begin(PININ, PINOUT)
@@ -27,31 +33,16 @@ void readSensor() {
     return;
   }
 
-  sensors_event_t acc, gyr, _;
-  mpu.getEvent(&acc, &gyr, &_);
+  uint8_t read_buf[(DATABUFSIZE - CODESIZE) / 8];
+  uint8_t write_buf[DATABUFSIZE / 8]
+  size_t ok = ESPSerial.readBytes(&read_buf, DATABUFSIZE - CODESIZE);
 
-  // Note to anyone modifying this:
-  // Ensure buffer length always matches the data
-  uint32_t ts = acc.timestamp;
-  float ax = acc.acceleration.x;
-  float ay = acc.acceleration.y;
-  float az = acc.acceleration.z;
-  float gx = gyr.gyro.x;
-  float gy = gyr.gyro.y;
-  float gz = gyr.gyro.z;
 
-  uint8_t *p = batch[batchCount++];
-  auto put = [&p](const auto &v) { memcpy(p, &v, sizeof(v)); p += sizeof(v); };
-
-  put(ts);
-  put(ax); put(ay); put(az);
-  put(gx); put(gy); put(gz);
-
-  // Comment out / delete on final build...
-  if (p - &batch[batchCount-1][0] != PACKETBUFLEN) {
-    Serial.printf("BUG: packet size %d, expected %d\n",
-                  (int)(p - &batch[batchCount-1][0]), PACKETBUFLEN);  
+  if (ok == 0) {
+    return;
   }
+
+  encode(&read_buf, &batch[batchCount++]);
 }
 
 void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length) {
@@ -73,11 +64,8 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
 }
 
 void setup() {
-  Serial.begin(DATA_RATE);
-  mpu.begin();
-
-  mpu.setAccelerometerRange(MPU6050_RANGE_4_G);
-  mpu.setGyroRange(MPU6050_RANGE_500_DEG);
+  Serial.begin(SERIAL_BAUD);
+  ESPSerial.begin(UART_BAUD, SERIAL_8N1, RX_GPIO, TX_GPIO);
 
   Serial.print("Setting AP (Access Point)...");
   WiFi.softAP(ssid);
@@ -98,7 +86,7 @@ void loop() {
     readSensor();
     
     if (batchCount == BUFSIZE) {
-      webSocket.broadcastBIN((uint8_t*)batch, PACKETBUFLEN * batchCount);
+      webSocket.broadcastBIN((uint8_t*)batch, (DATABUFSIZE / 8) * batchCount);
       batchCount = 0;
     }
   }

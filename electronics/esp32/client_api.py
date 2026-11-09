@@ -3,6 +3,7 @@ from enum import Enum
 from typing import Self
 from collections import deque
 from websockets import ClientConnection
+from hamming_decode import *
 import websockets
 import struct
 
@@ -13,18 +14,28 @@ class Mode(Enum):
 
 
 class MPU6050Data:
-    def __init__(self, data):
-        self.timestamp = data[0]
-        self.ax = data[1]
-        self.ay = data[2]
-        self.az = data[3]
-        self.gx = data[4]
-        self.gy = data[5]
-        self.gz = data[6]
+    def __init__(self, data, CHECKSUM: Checksum):
+        self.CHECKSUM = CHECKSUM
+        if CHECKSUM != Checksum.CORRUPT:
+            self.timestamp = data[0]
+            self.ax = data[1]
+            self.ay = data[2]
+            self.az = data[3]
+            self.gx = data[4]
+            self.gy = data[5]
+            self.gz = data[6]
+
+    def __getattribute__(self, name):
+        if (
+            object.__getattribute__(self, "CHECKSUM") == Checksum.CORRUPT
+            and name != "CHECKSUM"
+        ):
+            raise AttributeError("Attempting to read corrupt data!")
+        return object.__getattribute__(self, name)
 
 
 class ESP32_socket_link:
-    PACKET = struct.Struct("<I6f")
+    PACKET = struct.Struct("<I6h")
 
     def __init__(self, url: str, MODE: Mode = Mode.BUF_WRITE) -> None:
         self.url: str = url
@@ -76,8 +87,7 @@ class ESP32_socket_link:
                                 f"partial packet at offset {offset}, frame len {len(msg)}"
                             )
                             break
-                        mpuData = MPU6050Data(self.PACKET.unpack_from(msg, offset))
-                        self._buffer.append(mpuData)
+                        self._buffer.append(self.unpack_mpu(msg))
                 if isinstance(msg, str):
                     print(msg)
         except websockets.ConnectionClosed:
@@ -97,10 +107,23 @@ class ESP32_socket_link:
                             f"partial packet at offset {offset}, frame len {len(msg)}"
                         )
                         break
-                    mpuData = MPU6050Data(self.PACKET.unpack_from(msg, offset))
-                    yield mpuData
+
+                    yield self.unpack_mpu(msg)
             if isinstance(msg, str):
                 print(msg)
+
+    def unpack_mpu(self, msg):
+        syndrome = calculate_error_syndrome(msg)
+        if syndrome > 128:
+            mpuData = MPU6050Data((), Checksum.CORRUPT)
+        elif syndrome == 0:
+            data = self.PACKET.unpack_from(decode(msg, syndrome))
+            mpuData = MPU6050Data(data, Checksum.NO_ERR)
+        else:
+            data = self.PACKET.unpack_from(decode(msg, syndrome))
+            mpuData = MPU6050Data(data, Checksum.BIT_ERR)
+
+        return mpuData
 
     async def issue_command(self, cmd: str) -> bool:
         if self._ws is None:
