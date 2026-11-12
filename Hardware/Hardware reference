@@ -1,5 +1,5 @@
 Hardware Models:
 
 STM32 Microcontroller: STM32F411CEU6
-ESP32: ESP32 HW-394 (WR-32) ... for now
+ESP32: ESP32C3 super mini
 IMU: MPU6050
