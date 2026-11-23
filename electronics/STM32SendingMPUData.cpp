@@ -4,7 +4,7 @@
 // 1. Configure I2C3 on PB4 (SDA) and PB8 (SCL)
 TwoWire WireMPU(PB4, PB8);
 
-// 2. Configure USART1 on PA10 (RX) and PA9 (TX) using STM32 Core 3.0.0 Uart class
+// 2. Configure USART1 on PA10 (RX) and PA9 (TX) for STM32 Core 3.0.0
 Uart SerialESP(PA10, PA9);
 
 const uint8_t MPU6050_ADDR    = 0x68;
@@ -65,7 +65,7 @@ void loop() {
             yaw   += gz * dt;
 
             // Send formatted CSV line over PA9 (TX) to ESP32
-            char tx_buffer[48];
+            char tx_buffer[64];
             snprintf(tx_buffer, sizeof(tx_buffer), "%.2f,%.2f,%.2f\n", pitch, yaw, roll);
             SerialESP.print(tx_buffer);
         }
