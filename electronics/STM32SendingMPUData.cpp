@@ -4,8 +4,8 @@
 // 1. Configure I2C3 on PB4 (SDA) and PB8 (SCL)
 TwoWire WireMPU(PB4, PB8);
 
-// 2. Configure USART1 on PA10 (RX) and PA9 (TX)
-HardwareSerial SerialESP(PA10, PA9);
+// 2. Configure USART1 on PA10 (RX) and PA9 (TX) using STM32 Core 3.0.0 Uart class
+Uart SerialESP(PA10, PA9);
 
 const uint8_t MPU6050_ADDR    = 0x68;
 const uint8_t PWR_MGMT_1_REG  = 0x6B;
