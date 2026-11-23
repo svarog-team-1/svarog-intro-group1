@@ -1,0 +1,28 @@
+#include <Arduino.h>
+
+HardwareSerial STM32Serial(1);
+
+// Change these to the ESP pins you physically use.
+const int STM32_RX_PIN = 4;  // ESP receives STM32 TX
+const int STM32_TX_PIN = 5;  // ESP sends to STM32 RX
+
+void setup()
+{
+  Serial.begin(115200);  // ESP USB connection to computer
+  STM32Serial.begin(115200, SERIAL_8N1,
+                    STM32_RX_PIN, STM32_TX_PIN);
+
+  delay(1000);
+  Serial.println("ESP serial bridge ready");
+}
+
+void loop()
+{
+  while (STM32Serial.available()) {
+    Serial.write(STM32Serial.read());
+  }
+
+  while (Serial.available()) {
+    STM32Serial.write(Serial.read());
+  }
+}
