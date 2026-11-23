@@ -1,0 +1,23 @@
+#include <Arduino.h>
+
+#define RX_PIN 17  // Connected to STM32 PA9 (TX)
+#define TX_PIN 16  // Connected to STM32 PA10 (RX)
+
+void setup() {
+    Serial.begin(115200); // USB serial monitor
+    Serial1.begin(9600, SERIAL_8N1, RX_PIN, TX_PIN);
+    Serial1.setTimeout(100); // Prevent blocking if a packet is incomplete
+}
+
+void loop() {
+    if (Serial1.available()) {
+        String data = Serial1.readStringUntil('\n');
+        
+        Serial.printf(data.c_str());
+        Serial.printf("\n");
+        //float pitch, yaw, roll;
+        //if (sscanf(data.c_str(), "%f,%f,%f", &pitch, &yaw, &roll) == 3) {
+        //    Serial.printf("Pitch: %.2f | Yaw: %.2f | Roll: %.2f\n", pitch, yaw, roll);
+        //}
+    }
+}
